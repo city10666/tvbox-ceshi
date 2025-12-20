@@ -1,4 +1,4 @@
-name: TVBox Parses Auto Group (Smart)
+name: TVBox Parses Evolution (Stable)
 
 permissions:
   contents: write
@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout repo
         uses: actions/checkout@v4
 
       - name: Install tools
@@ -21,22 +21,20 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y jq curl
 
-      - name: Fetch upstream
+      - name: Fetch upstream dianshi.json
         run: |
           curl -L -o upstream.json \
           https://raw.githubusercontent.com/qist/tvbox/master/dianshi.json
 
-      - name: Init stats (first run safe)
+      - name: Init stats (safe)
         run: |
-          if [ ! -f parses_stats.json ]; then
-            echo '{}' > parses_stats.json
-          fi
+          [ -f parses_stats.json ] || echo '{}' > parses_stats.json
 
-      - name: Build base parses + spider
+      - name: Normalize upstream → base.json
         run: |
-          jq --slurpfile up upstream.json '
+          jq '
             .parses = (
-              $up[0].parses
+              .parses
               | map(
                   if .name == "Json聚合" and .type == 3 and .url == "Demo" then
                     [
@@ -51,16 +49,15 @@ jobs:
               | flatten
             )
             | .spider = "https://raw.githubusercontent.com/qist/tvbox/master/jar/fan.txt;md5;3962e9dbce2c7b61a53b1b796f098d47"
-          ' aiyouteng.json > aiyouteng.tmp.json
+          ' upstream.json > base.json
 
-      - name: Auto group + stats learning
+      - name: Auto group + learning
         run: |
           MAX_PARALLEL=6
-
           FAST=()
           SLOW=()
 
-          jq -c '.parses[]' aiyouteng.tmp.json | while read -r item; do
+          jq -c '.parses[]' base.json | while read -r item; do
             url=$(echo "$item" | jq -r '.url')
 
             if [[ "$url" == "Demo" || "$url" == "Parallel" || "$url" == "Sequence" ]]; then
@@ -68,7 +65,7 @@ jobs:
             fi
 
             key=$(echo -n "$url" | md5sum | cut -d' ' -f1)
-            stat=$(jq -r ".\"$key\".ok // 0" parses_stats.json)
+            ok=$(jq -r ".\"$key\".ok // 0" parses_stats.json)
             total=$(jq -r ".\"$key\".total // 0" parses_stats.json)
 
             start=$(date +%s%3N)
@@ -77,30 +74,32 @@ jobs:
                 --connect-timeout 4 \
                 --max-time 6 \
                 -s "$url" >/dev/null; then
-              ok=1
+              hit=1
             else
-              ok=0
+              hit=0
             fi
             end=$(date +%s%3N)
             cost=$((end - start))
 
-            jq ".\"$key\".ok = ($stat + $ok) | .\"$key\".total = ($total + 1)" \
-              parses_stats.json > parses_stats.tmp && mv parses_stats.tmp parses_stats.json
+            jq ".\"$key\" = {ok: ($ok + $hit), total: ($total + 1)}" \
+              parses_stats.json > tmp && mv tmp parses_stats.json
 
-            if [[ $ok -eq 1 && $cost -le 3000 ]]; then
+            score=$(( (ok * 100 / (total + 1)) - cost ))
+
+            if [[ $hit -eq 1 && $cost -le 3000 ]]; then
               FAST+=("$item")
             else
               SLOW+=("$item")
             fi
           done
 
-          printf '%s\n' "${FAST[@]}" | head -n $MAX_PARALLEL > fast.json
-          printf '%s\n' "${FAST[@]:$MAX_PARALLEL}" "${SLOW[@]}" > slow.json
+          printf '%s\n' "${FAST[@]}" | head -n $MAX_PARALLEL > fast.txt
+          printf '%s\n' "${FAST[@]:$MAX_PARALLEL}" "${SLOW[@]}" > slow.txt
 
-          jq -s '.' fast.json > parallel.json
-          jq -s '.' slow.json > sequence.json
+          jq -s '.' fast.txt > parallel.json
+          jq -s '.' slow.txt > sequence.json
 
-      - name: Write final parses
+      - name: Build final aiyouteng.json
         run: |
           jq --slurpfile p parallel.json --slurpfile s sequence.json '
             .parses = (
@@ -111,12 +110,12 @@ jobs:
               ]
               + $p[0] + $s[0]
             )
-          ' aiyouteng.tmp.json > aiyouteng.json
+          ' base.json > aiyouteng.json
 
-      - name: Commit
+      - name: Commit changes
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
           git add aiyouteng.json parses_stats.json
-          git diff --cached --quiet || git commit -m "auto group parses with learning"
+          git diff --cached --quiet || git commit -m "evolve parses with learning"
           git push
