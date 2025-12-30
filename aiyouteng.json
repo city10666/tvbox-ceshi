@@ -10,7 +10,7 @@
       "ua": "okhttp/3.8.1",
       "timeout": 20,
       "epg": "https://epg.112114.xyz/?ch={name}&date={date}",
-      "logo": "https://logo.ugigc.dpdns.org/{name}.png"
+      "logo": "https://logo.wyfc.qzz.io/{name}.png"
     }
   ],
   "wallpaper": "https://qist.cc/api/api.php",
@@ -842,6 +842,18 @@
       "changeable": 1
     },
     {
+      "key": "88",
+      "name": "⚽88┃看球",
+      "type": 3,
+      "api": "csp_Sir88Guard",
+      "timeout": 10,
+      "searchable": 0,
+      "changeable": 0,
+      "style": {
+        "type": "list"
+      }
+    },
+    {
       "key": "超全",
       "name": "⚽超全┃看球",
       "type": 3,
@@ -853,18 +865,6 @@
         "type": "list"
       },
       "ext": "uqGL1fpJNAUf8fdTwZCE5qSp+Q=="
-    },
-    {
-      "key": "88",
-      "name": "⚽88┃看球",
-      "type": 3,
-      "api": "csp_Sir88Guard",
-      "timeout": 10,
-      "searchable": 0,
-      "changeable": 0,
-      "style": {
-        "type": "list"
-      }
     },
     {
       "key": "看球",
